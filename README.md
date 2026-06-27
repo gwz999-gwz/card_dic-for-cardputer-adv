@@ -35,7 +35,7 @@
 
 ## 烧录
 
-1. 在 SD 卡根目录建立 `dictcard/` 子目录,把 `device/data/` 下的 `dict.bin` `dict.idx` `font.bin` 三个文件复制进去(本仓库已自带一份示例数据)。
+1. 在 SD 卡根目录建立 `dictcard/` 子目录,把生成的 `dict.bin` `dict.idx` `font.bin` 三个文件复制进去(本仓库不含词典数据,需自行生成,见下文)。
 2. 按需修改 `device/platformio.ini` 的 `upload_port`(默认 `COM5`)。
 3. 编译并烧录:
 
@@ -64,9 +64,9 @@
 
 Alt 键循环切换,详情页内容按段落过滤:
 
-- **ALL** — 全部内容(默认)
-- **EN** — 仅显示英文释义(青色)
-- **CN** — 仅显示中文释义(橙色)
+- **ALL** — 全部内容
+- **EN** — 仅显示英文释义
+- **CN** — 仅显示中文释义
 
 ## 词典与字体制作
 
@@ -85,6 +85,7 @@ python tools/scan_missing_chars.py
 ```
 
 浏览器打开 `tools/font_editor.html` 可视化补字/调字。
+请自行下载牛津10版.mdx文件
 
 ## 性能要点
 
@@ -95,4 +96,4 @@ python tools/scan_missing_chars.py
 
 ## 许可
 
-本仓库仅包含固件源码与工具脚本。词典内容版权归原 MDX 源所有,字体版权归原 TTF 源所有。
+本仓库仅包含固件源码与工具脚本。
