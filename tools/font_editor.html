@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>font.bin 字形编辑器 — Cardputer 电子辞典</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #eef1f5;
+            --panel: #ffffff;
+            --border: #d1d9e6;
+            --border-strong: #b9c4d0;
+            --text: #1f2937;
+            --text-2: #4b5563;
+            --text-3: #6b7280;
+            --accent: #2563eb;
+            --accent-2: #1d4ed8;
+            --warn: #dc2626;
+            --warn-bg: #fef2f2;
+            --ok: #16a34a;
+            --ok-bg: #f0fdf4;
+            --hl: #fbbf24;
+            --grid: #cbd5e1;
+            --grid-strong: #94a3b8;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            overflow: hidden;
+        }
+        #app {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+
+        /* ─── Header ─── */
+        header {
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .head-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        header h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        header h1 small { font-weight: 400; color: var(--text-3); font-size: 0.85rem; margin-left: 6px; }
+
+        #file-input { display: none; }
+        .btn {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .btn:hover { background: #f3f6fa; border-color: var(--border-strong); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+        .btn-danger { color: var(--warn); border-color: #fecaca; }
+        .btn-danger:hover { background: var(--warn-bg); }
+        .btn-warn { color: #b45309; border-color: #fde68a; background: #fffbeb; }
+        .btn-warn:hover { background: #fef3c7; }
+
+        #search-input {
+            flex: 1 1 240px;
+            min-width: 200px;
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: #fff;
+            outline: none;
+        }
+        #search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+
+        #file-info {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 0.8rem;
+            color: var(--text-2);
+        }
+        #file-info .chip {
+            background: #f3f6fa;
+            padding: 2px 10px;
+            border-radius: 4px;
+        }
+        #file-info .chip strong { color: var(--text); font-weight: 600; }
+        #file-info .chip-warn { background: var(--warn-bg); color: var(--warn); }
+
+        /* ─── Main 2-col layout ─── */
+        main {
+            display: grid;
+            grid-template-columns: 1fr 440px;
+            gap: 0;
+            min-height: 0;
+        }
+        #grid-pane {
+            overflow-y: auto;
+            padding: 14px;
+            background: var(--bg);
+        }
+        #editor-pane {
+            border-left: 1px solid var(--border);
+            background: var(--panel);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        /* ─── Glyph grid ─── */
+        #glyph-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 8px;
+        }
+        .glyph-card {
+            background: #fff;
+            border-radius: 6px;
+            padding: 8px 4px 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            border: 1px solid #e5eaef;
+            cursor: pointer;
+            transition: all 0.15s;
+            user-select: none;
+        }
+        .glyph-card:hover {
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+            transform: translateY(-1px);
+        }
+        .glyph-card.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(37,99,235,0.3);
+        }
+        .glyph-card.modified {
+            border-color: var(--hl);
+            background: #fffbeb;
+        }
+        .glyph-card.added {
+            border-color: var(--ok);
+            background: var(--ok-bg);
+        }
+        .glyph-card canvas {
+            width: 56px;
+            height: 56px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 1px solid #dde3ec;
+            border-radius: 4px;
+            background: repeating-conic-gradient(#e9eef3 0% 25%, #ffffff 0% 50%) 0 0 / 8px 8px;
+            display: block;
+        }
+        .glyph-card .char-name {
+            font-size: 1rem;
+            line-height: 1.3;
+            margin: 4px 0 1px;
+            min-height: 1.3rem;
+            font-weight: 500;
+        }
+        .glyph-card .unicode {
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 0.7rem;
+            color: var(--text-3);
+        }
+        .glyph-card .dims {
+            font-size: 0.65rem;
+            color: #9ca3af;
+        }
+        .glyph-card .badge {
+            position: absolute;
+            font-size: 0.6rem;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-top: 2px;
+        }
+        .glyph-card { position: relative; }
+        .badge-new { background: var(--ok); color: #fff; top: 4px; right: 4px; }
+        .badge-mod { background: var(--hl); color: #1f2937; top: 4px; right: 4px; }
+
+        /* ─── 分页条 ─── */
+        #pagination {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        #pagination .page-info {
+            color: var(--text-2);
+            min-width: 160px;
+            text-align: center;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 0.8rem;
+        }
+        #pagination button {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.1s;
+        }
+        #pagination button:hover:not(:disabled) { background: #f3f6fa; border-color: var(--border-strong); }
+        #pagination button:disabled { opacity: 0.3; cursor: not-allowed; }
+        #pagination .page-jump {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--text-3);
+            font-size: 0.8rem;
+        }
+        #pagination .page-jump input {
+            width: 80px;
+            padding: 3px 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 0.8rem;
+            outline: none;
+        }
+        #pagination .page-jump input:focus { border-color: var(--accent); }
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-3);
+            background: #fff;
+            border-radius: 12px;
+        }
+        .empty-state p { font-size: 1.05rem; }
+
+        /* ─── Editor pane ─── */
+        .editor-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-3);
+            text-align: center;
+            padding: 24px;
+        }
+        .editor-empty .big { font-size: 3rem; margin-bottom: 8px; }
+        .editor-section {
+            padding: 12px 16px;
+            border-bottom: 1px solid #eef0f3;
+        }
+        .editor-section h3 {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-3);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .editor-canvas-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        #edit-canvas {
+            border: 1px solid var(--border-strong);
+            border-radius: 4px;
+            background: #fff;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            cursor: crosshair;
+            touch-action: none;
+        }
+        .canvas-row {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+        .preview-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+        .preview-block label {
+            font-size: 0.7rem;
+            color: var(--text-3);
+        }
+        #preview-canvas {
+            width: 56px;
+            height: 56px;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: repeating-conic-gradient(#e9eef3 0% 25%, #ffffff 0% 50%) 0 0 / 8px 8px;
+        }
+        .preview-block .actual {
+            font-size: 1.2rem;
+            line-height: 1.2;
+            height: 56px;
+            width: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: #fff;
+            font-family: "Noto Sans SC", "Segoe UI", sans-serif;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+        }
+        .input-row label {
+            color: var(--text-2);
+            min-width: 64px;
+        }
+        .input-row input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-family: "SF Mono", monospace;
+            background: #fff;
+            outline: none;
+        }
+        .input-row input:focus { border-color: var(--accent); }
+        .input-row input:invalid { border-color: var(--warn); }
+
+        .tool-row {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .tool-btn {
+            padding: 6px 10px;
+            font-size: 0.8rem;
+            border: 1px solid var(--border);
+            background: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.1s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .tool-btn:hover { background: #f3f6fa; }
+        .tool-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+        .tool-btn.icon { padding: 6px 8px; min-width: 30px; justify-content: center; }
+
+        .action-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        /* ─── Modal ─── */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .modal {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 380px;
+            max-width: 90vw;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .modal h2 { font-size: 1.1rem; margin-bottom: 12px; }
+        .modal .input-row { margin-bottom: 10px; }
+        .modal .input-row input { font-size: 0.95rem; padding: 6px 10px; }
+        .modal .help { font-size: 0.78rem; color: var(--text-3); margin-top: 4px; }
+        .modal .error { color: var(--warn); font-size: 0.85rem; margin-top: 8px; }
+        .modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--text);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            z-index: 200;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: fadeIn 0.2s;
+        }
+        .toast.toast-ok { background: var(--ok); }
+        .toast.toast-err { background: var(--warn); }
+        @keyframes fadeIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+        @media (max-width: 900px) {
+            main { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+            #editor-pane { border-left: none; border-top: 1px solid var(--border); max-height: 50vh; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <header>
+        <div class="head-row">
+            <h1>✏️ font.bin 字形编辑器 <small>Cardputer 电子辞典</small></h1>
+            <button class="btn btn-primary" id="load-btn">📂 打开 font.bin</button>
+            <button class="btn" id="add-btn" disabled>➕ 添加新字形</button>
+            <button class="btn" id="export-btn" disabled>💾 导出 font.bin</button>
+            <input type="text" id="search-input" placeholder="🔍 搜索 (Unicode / 字符 / 描述)" disabled>
+            <input type="file" id="file-input" accept=".bin">
+        </div>
+        <div id="file-info">
+            <span class="chip">尚未加载字体文件</span>
+        </div>
+    </header>
+    <main>
+        <div id="grid-pane">
+            <div id="pagination" style="display:none;">
+                <button id="page-first" title="首页">⏮</button>
+                <button id="page-prev" title="上一页">‹</button>
+                <span id="page-info" class="page-info">- / -</span>
+                <button id="page-next" title="下一页">›</button>
+                <button id="page-last" title="尾页">⏭</button>
+                <span class="page-jump">
+                    跳到 U+
+                    <input type="text" id="page-jump-input" placeholder="0259" maxlength="6">
+                </span>
+            </div>
+            <div id="glyph-grid">
+                <div class="empty-state"><p>请先点击 <strong>📂 打开 font.bin</strong> 加载字体</p></div>
+            </div>
+        </div>
+        <div id="editor-pane">
+            <div class="editor-empty" id="editor-empty">
+                <div class="big">🖌️</div>
+                <p>从左侧选择一个字形以编辑，<br>或点击 <strong>➕ 添加新字形</strong></p>
+            </div>
+            <div id="editor-content" style="display:none; flex-direction: column; flex: 1; min-height: 0;">
+                <div class="editor-section">
+                    <h3>字形信息</h3>
+                    <div class="input-row">
+                        <label>Unicode</label>
+                        <input type="text" id="ed-unicode" readonly>
+                    </div>
+                    <div class="input-row">
+                        <label>字符</label>
+                        <input type="text" id="ed-char" readonly style="font-family: 'Noto Sans SC', serif;">
+                    </div>
+                    <div class="input-row">
+                        <label>宽度</label>
+                        <input type="number" id="ed-width" min="1" max="32">
+                    </div>
+                    <div class="input-row">
+                        <label>高度</label>
+                        <input type="number" id="ed-height" min="1" max="32">
+                    </div>
+                </div>
+                <div class="editor-section">
+                    <h3>绘制</h3>
+                    <div class="editor-canvas-wrap">
+                        <canvas id="edit-canvas"></canvas>
+                        <div class="canvas-row">
+                            <div class="preview-block">
+                                <label>实际尺寸</label>
+                                <canvas id="preview-canvas"></canvas>
+                            </div>
+                            <div class="preview-block">
+                                <label>渲染效果</label>
+                                <div class="actual" id="preview-actual"> </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="editor-section">
+                    <h3>工具</h3>
+                    <div class="tool-row" style="margin-bottom: 8px;">
+                        <button class="tool-btn active" id="tool-pencil" title="画笔 (1)">✏️ 画笔</button>
+                        <button class="tool-btn" id="tool-eraser" title="橡皮 (2)">🧹 橡皮</button>
+                        <button class="tool-btn" id="tool-fill" title="填充 (3)">🪣 填充</button>
+                    </div>
+                    <div class="tool-row">
+                        <button class="tool-btn icon" id="tool-undo" title="撤销 (Ctrl+Z)">↶</button>
+                        <button class="tool-btn icon" id="tool-invert" title="反色">⇋</button>
+                        <button class="tool-btn icon" id="tool-clear" title="清空">🗑️</button>
+                        <button class="tool-btn icon" id="tool-zoom-out" title="缩小">-</button>
+                        <button class="tool-btn icon" id="tool-zoom-in" title="放大">+</button>
+                        <button class="tool-btn icon" id="tool-flip-h" title="水平翻转">⇄</button>
+                        <button class="tool-btn icon" id="tool-flip-v" title="垂直翻转">⇅</button>
+                    </div>
+                </div>
+                <div class="editor-section" style="border-bottom: none; margin-top: auto;">
+                    <div class="action-row">
+                        <button class="btn btn-primary" id="save-btn" style="flex: 1;">💾 保存到字形库</button>
+                        <button class="btn btn-danger" id="delete-btn" style="display:none;">删除</button>
+                        <button class="btn" id="cancel-btn">取消</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+'use strict';
+
+(function() {
+    // ─── State ───
+    let font = null; // { header, glyphs (Map by unicode), buffer }
+    let selectedUnicode = null;
+    let isNewGlyph = false;
+    let editor = {
+        pixels: null,    // Uint8Array of size w*h
+        width: 12,
+        height: 12,
+        zoom: 32,
+        tool: 'pencil',
+        history: [],
+        historyIdx: -1,
+    };
+    let editingExisting = false; // distinguishes "loaded from file" vs "new"
+    let dirty = false;            // has current edit been changed since last save
+
+    // ─── 分页状态 ───
+    const PAGE_SIZE = 2000;
+    let currentPage = 0;
+    let currentList = [];   // 当前显示的完整列表（搜索/全部）
+
+    // ─── DOM refs ───
+    const fileInput   = document.getElementById('file-input');
+    const loadBtn     = document.getElementById('load-btn');
+    const addBtn      = document.getElementById('add-btn');
+    const exportBtn   = document.getElementById('export-btn');
+    const searchInput = document.getElementById('search-input');
+    const fileInfo    = document.getElementById('file-info');
+    const glyphGrid   = document.getElementById('glyph-grid');
+    const editorEmpty = document.getElementById('editor-empty');
+    const editorContent = document.getElementById('editor-content');
+    const editCanvas  = document.getElementById('edit-canvas');
+    const previewCanvas = document.getElementById('preview-canvas');
+    const previewActual = document.getElementById('preview-actual');
+    const edUnicode   = document.getElementById('ed-unicode');
+    const edChar      = document.getElementById('ed-char');
+    const edWidth     = document.getElementById('ed-width');
+    const edHeight    = document.getElementById('ed-height');
+    const saveBtn     = document.getElementById('save-btn');
+    const deleteBtn   = document.getElementById('delete-btn');
+    const cancelBtn   = document.getElementById('cancel-btn');
+    const pagination  = document.getElementById('pagination');
+    const pageInfo    = document.getElementById('page-info');
+    const pageFirst   = document.getElementById('page-first');
+    const pagePrev    = document.getElementById('page-prev');
+    const pageNext    = document.getElementById('page-next');
+    const pageLast    = document.getElementById('page-last');
+    const pageJumpInput = document.getElementById('page-jump-input');
+    const ectx = editCanvas.getContext('2d');
+    const pctx = previewCanvas.getContext('2d');
+
+    // ─── File loading ───
+    loadBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', e => {
+        if (e.target.files[0]) loadFile(e.target.files[0]);
+        e.target.value = ''; // allow reloading same file
+    });
+
+    function loadFile(file) {
+        if (!file || !file.name.toLowerCase().endsWith('.bin')) {
+            toast('请选择 .bin 文件', 'err');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const buffer = e.target.result;
+                const result = parseBin(buffer);
+                font = result;
+                font.buffer = buffer;
+                selectedUnicode = null;
+                editingExisting = false;
+                isNewGlyph = false;
+                showEditorEmpty();
+                updateInfo(result.header);
+                setState(getSortedGlyphs(), 0);
+                addBtn.disabled = false;
+                exportBtn.disabled = false;
+                searchInput.disabled = false;
+                searchInput.value = '';
+                toast(`已加载 ${result.header.totalGlyphs} 个字形`, 'ok');
+            } catch (err) {
+                console.error(err);
+                toast('解析失败: ' + err.message, 'err');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function parseBin(buffer) {
+        const view = new DataView(buffer);
+        const magic = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+        if (magic !== 'CJF1') throw new Error('无效的文件签名 (期望 CJF1)');
+
+        const totalGlyphs = view.getUint16(4, true);
+        const fontHeight  = view.getUint8(6);
+        const maxWidth    = view.getUint8(7);
+        const header = { totalGlyphs, fontHeight, maxWidth, fileSize: buffer.byteLength };
+
+        const indexStart         = 16;
+        const bitmapSectionStart = indexStart + totalGlyphs * 10;
+        const glyphs = new Map();
+
+        for (let i = 0; i < totalGlyphs; i++) {
+            const entryOff = indexStart + i * 10;
+            const unicode   = view.getUint32(entryOff, true);
+            const bitmapOff = view.getUint32(entryOff + 4, true);
+            const width     = view.getUint8(entryOff + 8);
+            const height    = view.getUint8(entryOff + 9);
+            const rowBytes  = Math.ceil(width / 8);
+            const bmpSize   = rowBytes * height;
+            const absBmpPos = bitmapSectionStart + bitmapOff;
+            let bitmapData = new Uint8Array(width * height); // default empty
+            if (bmpSize > 0 && (absBmpPos + bmpSize) <= buffer.byteLength) {
+                // Decode 1bpp MSB-left into per-pixel array
+                const raw = new Uint8Array(buffer, absBmpPos, bmpSize);
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const byteIndex = y * rowBytes + (x >>> 3);
+                        const bitIndex  = 7 - (x & 7);
+                        if ((raw[byteIndex] >>> bitIndex) & 1) {
+                            bitmapData[y * width + x] = 1;
+                        }
+                    }
+                }
+            }
+            glyphs.set(unicode, {
+                unicode, width, height, rowBytes, pixels: bitmapData,
+                char: String.fromCodePoint(unicode),
+                status: 'original', // 'original' | 'modified' | 'added' | 'deleted'
+            });
+        }
+        return { header, glyphs };
+    }
+
+    function getSortedGlyphs() {
+        if (!font) return [];
+        return [...font.glyphs.values()]
+            .filter(g => g.status !== 'deleted')
+            .sort((a, b) => a.unicode - b.unicode);
+    }
+
+    function updateInfo(header) {
+        if (!header) {
+            fileInfo.innerHTML = '<span class="chip">尚未加载字体文件</span>';
+            return;
+        }
+        const modifiedCount = [...font.glyphs.values()].filter(g => g.status === 'modified' || g.status === 'added' || g.status === 'deleted').length;
+        let html = `
+            <span class="chip"><strong>字形数</strong> ${font.glyphs.size}</span>
+            <span class="chip"><strong>字高</strong> ${header.fontHeight} px</span>
+            <span class="chip"><strong>最大宽</strong> ${header.maxWidth} px</span>
+            <span class="chip"><strong>文件大小</strong> ${(header.fileSize / 1024).toFixed(1)} KB</span>
+        `;
+        if (modifiedCount > 0) {
+            html += `<span class="chip chip-warn"><strong>未导出修改</strong> ${modifiedCount}</span>`;
+        }
+        fileInfo.innerHTML = html;
+    }
+
+    // ─── Glyph grid rendering (分页) ───
+    function setState(list, page) {
+        currentList = list || [];
+        const totalPages = Math.max(1, Math.ceil(currentList.length / PAGE_SIZE));
+        if (typeof page !== 'number') page = 0;
+        currentPage = Math.max(0, Math.min(page, totalPages - 1));
+        renderGrid();
+        renderPagination();
+    }
+
+    function renderGrid() {
+        const start = currentPage * PAGE_SIZE;
+        const slice = currentList.slice(start, start + PAGE_SIZE);
+        if (!slice || slice.length === 0) {
+            glyphGrid.innerHTML = '<div class="empty-state"><p>😕 没有匹配的字形</p></div>';
+            return;
+        }
+        const fragment = document.createDocumentFragment();
+        for (const g of slice) {
+            const card = document.createElement('div');
+            card.className = 'glyph-card';
+            if (g.unicode === selectedUnicode) card.classList.add('selected');
+            if (g.status === 'modified') card.classList.add('modified');
+            if (g.status === 'added') card.classList.add('added');
+            card.dataset.unicode = g.unicode;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = g.width;
+            canvas.height = g.height;
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.createImageData(g.width, g.height);
+            const data = imgData.data;
+            for (let y = 0; y < g.height; y++) {
+                for (let x = 0; x < g.width; x++) {
+                    const isSet = g.pixels[y * g.width + x];
+                    const idx = (y * g.width + x) << 2;
+                    if (isSet) {
+                        data[idx] = 0x1a; data[idx+1] = 0x1a; data[idx+2] = 0x1a; data[idx+3] = 0xff;
+                    } else {
+                        data[idx] = 0xff; data[idx+1] = 0xff; data[idx+2] = 0xff; data[idx+3] = 0xff;
+                    }
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            const charDiv = document.createElement('div');
+            charDiv.className = 'char-name';
+            if (g.unicode === 0x20 || g.unicode === 0x3000) charDiv.textContent = '␣';
+            else if (g.unicode < 0x20 || g.unicode === 0x7F) charDiv.textContent = '␀';
+            else charDiv.textContent = g.char;
+
+            const unicodeDiv = document.createElement('div');
+            unicodeDiv.className = 'unicode';
+            unicodeDiv.textContent = 'U+' + g.unicode.toString(16).toUpperCase().padStart(4, '0');
+
+            const dimsDiv = document.createElement('div');
+            dimsDiv.className = 'dims';
+            dimsDiv.textContent = `${g.width}×${g.height}`;
+
+            if (g.status === 'added') {
+                const badge = document.createElement('div');
+                badge.className = 'badge badge-new';
+                badge.textContent = 'NEW';
+                card.appendChild(badge);
+            } else if (g.status === 'modified') {
+                const badge = document.createElement('div');
+                badge.className = 'badge badge-mod';
+                badge.textContent = 'M';
+                card.appendChild(badge);
+            }
+
+            card.append(canvas, charDiv, unicodeDiv, dimsDiv);
+            card.addEventListener('click', () => selectGlyph(g.unicode));
+            fragment.appendChild(card);
+        }
+        glyphGrid.innerHTML = '';
+        glyphGrid.appendChild(fragment);
+    }
+
+    // ─── 分页 UI ───
+    function renderPagination() {
+        const total = currentList.length;
+        if (total === 0) {
+            pagination.style.display = 'none';
+            return;
+        }
+        pagination.style.display = 'flex';
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        if (currentPage >= totalPages) currentPage = totalPages - 1;
+        const start = currentPage * PAGE_SIZE + 1;
+        const end = Math.min((currentPage + 1) * PAGE_SIZE, total);
+        pageInfo.textContent = `${start}–${end} / ${total} · ${currentPage + 1}/${totalPages}`;
+        pageFirst.disabled = currentPage === 0;
+        pagePrev.disabled = currentPage === 0;
+        pageNext.disabled = currentPage >= totalPages - 1;
+        pageLast.disabled = currentPage >= totalPages - 1;
+    }
+
+    function gotoPage(page) {
+        const totalPages = Math.max(1, Math.ceil(currentList.length / PAGE_SIZE));
+        if (page === Infinity || page >= totalPages - 1) currentPage = totalPages - 1;
+        else currentPage = Math.max(0, Math.min(page, totalPages - 1));
+        renderGrid();
+        renderPagination();
+        document.getElementById('grid-pane').scrollTop = 0;
+    }
+
+    pageFirst.onclick = () => gotoPage(0);
+    pagePrev.onclick = () => gotoPage(currentPage - 1);
+    pageNext.onclick = () => gotoPage(currentPage + 1);
+    pageLast.onclick = () => gotoPage(Infinity);
+
+    pageJumpInput.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        const raw = pageJumpInput.value.trim().replace(/^U\+/i, '').replace(/^0x/i, '');
+        const cp = parseInt(raw, 16);
+        if (isNaN(cp) || cp < 0 || cp > 0x10FFFF) {
+            toast('无效的 Unicode', 'err');
+            return;
+        }
+        // 找到第一个 unicode >= cp 的索引
+        const idx = currentList.findIndex(g => g.unicode >= cp);
+        if (idx === -1) {
+            gotoPage(Infinity);
+            toast(`U+${cp.toUpperCase().padStart(4,'0')} 超出范围，跳到尾页`, 'err');
+        } else {
+            gotoPage(Math.floor(idx / PAGE_SIZE));
+        }
+        pageJumpInput.value = '';
+    });
+
+    // ─── Search ───
+    function debounce(fn, delay) {
+        let timer;
+        return function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), delay);
+        };
+    }
+    searchInput.addEventListener('input', debounce(e => {
+        const q = e.target.value.trim();
+        if (!q || !font) { setState(getSortedGlyphs(), 0); return; }
+        const lowerQ = q.toLowerCase();
+        const filtered = getSortedGlyphs().filter(g => {
+            const hex = g.unicode.toString(16).toUpperCase().padStart(4, '0');
+            if (hex.includes(lowerQ.toUpperCase())) return true;
+            if (g.char.includes(q)) return true;
+            if (`U+${hex}`.toLowerCase().includes(lowerQ)) return true;
+            if (`${g.width}×${g.height}`.includes(q)) return true;
+            if (`${g.unicode}`.includes(q)) return true;
+            return false;
+        });
+        setState(filtered, 0);
+    }, 150));
+
+    // ─── Editor ───
+    function showEditorEmpty() {
+        editorEmpty.style.display = 'flex';
+        editorContent.style.display = 'none';
+        selectedUnicode = null;
+        editingExisting = false;
+    }
+
+    function selectGlyph(unicode) {
+        if (!font) return;
+        const g = font.glyphs.get(unicode);
+        if (!g) return;
+        editingExisting = true;
+        isNewGlyph = false;
+        loadIntoEditor(g.pixels.slice(), g.width, g.height, g.unicode, false);
+        selectedUnicode = unicode;
+        // highlight in grid
+        document.querySelectorAll('.glyph-card').forEach(c => {
+            c.classList.toggle('selected', Number(c.dataset.unicode) === unicode);
+        });
+    }
+
+    addBtn.addEventListener('click', () => {
+        showAddModal();
+    });
+
+    function showAddModal() {
+        const backdrop = document.createElement('div');
+        backdrop.className = 'modal-backdrop';
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+            <h2>➕ 添加新字形</h2>
+            <div class="input-row">
+                <label>Unicode</label>
+                <input type="text" id="modal-unicode" placeholder="U+0259 或 0259 或 ə" maxlength="8">
+            </div>
+            <div class="help">支持格式：<code>U+0259</code>、<code>0259</code>、<code>0x259</code>、直接输入字符（如 ə）</div>
+            <div class="input-row" style="margin-top: 10px;">
+                <label>宽度</label>
+                <input type="number" id="modal-width" min="1" max="32" value="${font ? font.header.maxWidth : 12}">
+            </div>
+            <div class="input-row">
+                <label>高度</label>
+                <input type="number" id="modal-height" min="1" max="32" value="${font ? font.header.fontHeight : 12}">
+            </div>
+            <div class="error" id="modal-error" style="display:none;"></div>
+            <div class="actions">
+                <button class="btn" id="modal-cancel">取消</button>
+                <button class="btn btn-primary" id="modal-ok">开始绘制</button>
+            </div>
+        `;
+        backdrop.appendChild(modal);
+        document.body.appendChild(backdrop);
+        setTimeout(() => modal.querySelector('#modal-unicode').focus(), 50);
+
+        modal.querySelector('#modal-cancel').onclick = () => document.body.removeChild(backdrop);
+        backdrop.onclick = (e) => { if (e.target === backdrop) document.body.removeChild(backdrop); };
+        modal.querySelector('#modal-ok').onclick = () => {
+            const errEl = modal.querySelector('#modal-error');
+            errEl.style.display = 'none';
+            const raw = modal.querySelector('#modal-unicode').value.trim();
+            let cp = parseUnicodeInput(raw);
+            if (cp === null) {
+                errEl.textContent = '无效的 Unicode 输入';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (cp > 0x10FFFF) {
+                errEl.textContent = 'Unicode 超出最大范围 (0x10FFFF)';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (font.glyphs.has(cp)) {
+                const existing = font.glyphs.get(cp);
+                if (existing.status !== 'deleted') {
+                    errEl.textContent = `该 Unicode 已存在 (${formatUnicode(cp)})，请直接在字形库中编辑`;
+                    errEl.style.display = 'block';
+                    return;
+                }
+            }
+            const w = parseInt(modal.querySelector('#modal-width').value, 10);
+            const h = parseInt(modal.querySelector('#modal-height').value, 10);
+            if (!(w >= 1 && w <= 32) || !(h >= 1 && h <= 32)) {
+                errEl.textContent = '宽高必须在 1-32 之间';
+                errEl.style.display = 'block';
+                return;
+            }
+            document.body.removeChild(backdrop);
+            startNewGlyph(cp, w, h);
+        };
+    }
+
+    function parseUnicodeInput(raw) {
+        if (!raw) return null;
+        // Direct character input (length 1-2 for surrogate pair)
+        if (raw.length === 1) return raw.codePointAt(0);
+        if (raw.length === 2 && raw.charCodeAt(0) >= 0xD800 && raw.charCodeAt(0) <= 0xDBFF) {
+            return raw.codePointAt(0);
+        }
+        // Hex formats
+        const cleaned = raw.replace(/^U\+/i, '').replace(/^0x/i, '').trim();
+        if (/^[0-9A-Fa-f]+$/.test(cleaned)) {
+            const n = parseInt(cleaned, 16);
+            if (!isNaN(n)) return n;
+        }
+        // Decimal
+        if (/^\d+$/.test(cleaned)) {
+            return parseInt(cleaned, 10);
+        }
+        return null;
+    }
+
+    function formatUnicode(cp) {
+        return 'U+' + cp.toString(16).toUpperCase().padStart(cp > 0xFFFF ? 5 : 4, '0');
+    }
+
+    function startNewGlyph(cp, w, h) {
+        editingExisting = false;
+        isNewGlyph = true;
+        const pixels = new Uint8Array(w * h);
+        loadIntoEditor(pixels, w, h, cp, true);
+        selectedUnicode = cp;
+    }
+
+    function loadIntoEditor(pixels, w, h, unicode, isNew) {
+        editor.pixels = pixels;
+        editor.width = w;
+        editor.height = h;
+        editor.zoom = Math.max(16, Math.min(48, Math.floor(Math.min(420 / w, 420 / h))));
+        editor.tool = 'pencil';
+        editor.history = [{ pixels: pixels.slice(), width: w, height: h }];
+        editor.historyIdx = 0;
+        dirty = false;
+        isNewGlyph = isNew;
+
+        // Update UI
+        editorEmpty.style.display = 'none';
+        editorContent.style.display = 'flex';
+        edUnicode.value = formatUnicode(unicode);
+        edChar.value = (unicode >= 0x20 && unicode !== 0x7F) ? String.fromCodePoint(unicode) : '(不可显示)';
+        edWidth.value = w;
+        edHeight.value = h;
+        deleteBtn.style.display = isNew ? 'none' : 'inline-block';
+        document.getElementById('tool-pencil').classList.add('active');
+        document.getElementById('tool-eraser').classList.remove('active');
+        document.getElementById('tool-fill').classList.remove('active');
+
+        drawEditor();
+        drawPreview();
+    }
+
+    // ─── Editor canvas drawing ───
+    function drawEditor() {
+        const z = editor.zoom;
+        editCanvas.width = editor.width * z;
+        editCanvas.height = editor.height * z;
+        ectx.imageSmoothingEnabled = false;
+
+        // Background
+        ectx.fillStyle = '#fff';
+        ectx.fillRect(0, 0, editCanvas.width, editCanvas.height);
+
+        // Pixels
+        ectx.fillStyle = '#1a1a1a';
+        for (let y = 0; y < editor.height; y++) {
+            for (let x = 0; x < editor.width; x++) {
+                if (editor.pixels[y * editor.width + x]) {
+                    ectx.fillRect(x * z, y * z, z, z);
+                }
+            }
+        }
+
+        // Grid lines (light)
+        if (z >= 8) {
+            ectx.strokeStyle = '#cbd5e1';
+            ectx.lineWidth = 1;
+            ectx.beginPath();
+            for (let i = 0; i <= editor.width; i++) {
+                ectx.moveTo(i * z + 0.5, 0);
+                ectx.lineTo(i * z + 0.5, editCanvas.height);
+            }
+            for (let i = 0; i <= editor.height; i++) {
+                ectx.moveTo(0, i * z + 0.5);
+                ectx.lineTo(editCanvas.width, i * z + 0.5);
+            }
+            ectx.stroke();
+        }
+    }
+
+    function drawPreview() {
+        const w = editor.width, h = editor.height;
+        previewCanvas.width = w;
+        previewCanvas.height = h;
+        const imgData = pctx.createImageData(w, h);
+        const data = imgData.data;
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const isSet = editor.pixels[y * w + x];
+                const idx = (y * w + x) << 2;
+                if (isSet) { data[idx] = 0x1a; data[idx+1] = 0x1a; data[idx+2] = 0x1a; data[idx+3] = 0xff; }
+                else { data[idx] = 0xff; data[idx+1] = 0xff; data[idx+2] = 0xff; data[idx+3] = 0xff; }
+            }
+        }
+        pctx.putImageData(imgData, 0, 0);
+
+        // Actual rendered size for the character (using system font fallback)
+        const cp = parseInt(edUnicode.value.replace(/^U\+/i, ''), 16);
+        previewActual.textContent = (cp >= 0x20 && cp !== 0x7F) ? String.fromCodePoint(cp) : ' ';
+    }
+
+    // ─── Editor mouse interaction ───
+    let isDrawing = false;
+    let lastCell = null;
+    editCanvas.addEventListener('mousedown', e => {
+        e.preventDefault();
+        isDrawing = true;
+        applyTool(e);
+    });
+    editCanvas.addEventListener('mousemove', e => {
+        if (!isDrawing) return;
+        applyTool(e);
+    });
+    document.addEventListener('mouseup', () => { isDrawing = false; lastCell = null; });
+    editCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    function applyTool(e) {
+        const rect = editCanvas.getBoundingClientRect();
+        const x = Math.floor((e.clientX - rect.left) / editor.zoom);
+        const y = Math.floor((e.clientY - rect.top) / editor.zoom);
+        if (x < 0 || y < 0 || x >= editor.width || y >= editor.height) return;
+        const key = x + ',' + y;
+        if (lastCell === key) return; // skip repeated events on same cell
+        lastCell = key;
+
+        if (editor.tool === 'pencil') {
+            setPixel(x, y, 1);
+        } else if (editor.tool === 'eraser') {
+            setPixel(x, y, 0);
+        } else if (editor.tool === 'fill') {
+            if (isDrawing) {
+                floodFill(x, y, editor.pixels[y * editor.width + x] ? 0 : 1);
+                pushHistory();
+                drawEditor();
+                drawPreview();
+            }
+            isDrawing = false;
+        }
+    }
+
+    function setPixel(x, y, v) {
+        const old = editor.pixels[y * editor.width + x];
+        if (old === v) return;
+        editor.pixels[y * editor.width + x] = v;
+        // Draw just this cell for performance
+        ectx.fillStyle = v ? '#1a1a1a' : '#fff';
+        ectx.fillRect(x * editor.zoom, y * editor.zoom, editor.zoom, editor.zoom);
+        if (editor.zoom >= 8) {
+            ectx.strokeStyle = '#cbd5e1';
+            ectx.lineWidth = 1;
+            ectx.strokeRect(x * editor.zoom + 0.5, y * editor.zoom + 0.5, editor.zoom - 1, editor.zoom - 1);
+        }
+        dirty = true;
+        // Update preview's single cell
+        if (editor.zoom >= 12) {
+            // skip single-cell preview update for speed
+        } else {
+            drawPreview();
+        }
+    }
+
+    function pushHistory() {
+        // Truncate any redo branch
+        editor.history = editor.history.slice(0, editor.historyIdx + 1);
+        editor.history.push({ pixels: editor.pixels.slice(), width: editor.width, height: editor.height });
+        if (editor.history.length > 50) editor.history.shift();
+        editor.historyIdx = editor.history.length - 1;
+    }
+
+    function floodFill(sx, sy, newVal) {
+        const w = editor.width, h = editor.height;
+        const oldVal = editor.pixels[sy * w + sx];
+        if (oldVal === newVal) return;
+        const stack = [[sx, sy]];
+        const visited = new Uint8Array(w * h);
+        while (stack.length) {
+            const [x, y] = stack.pop();
+            if (x < 0 || y < 0 || x >= w || y >= h) continue;
+            const i = y * w + x;
+            if (visited[i]) continue;
+            if (editor.pixels[i] !== oldVal) continue;
+            visited[i] = 1;
+            editor.pixels[i] = newVal;
+            stack.push([x+1, y], [x-1, y], [x, y+1], [x, y-1]);
+        }
+    }
+
+    // Tool buttons
+    document.getElementById('tool-pencil').onclick = () => setTool('pencil');
+    document.getElementById('tool-eraser').onclick = () => setTool('eraser');
+    document.getElementById('tool-fill').onclick = () => setTool('fill');
+    function setTool(t) {
+        editor.tool = t;
+        document.getElementById('tool-pencil').classList.toggle('active', t === 'pencil');
+        document.getElementById('tool-eraser').classList.toggle('active', t === 'eraser');
+        document.getElementById('tool-fill').classList.toggle('active', t === 'fill');
+    }
+    document.getElementById('tool-undo').onclick = () => {
+        if (editor.historyIdx > 0) {
+            editor.historyIdx--;
+            const h = editor.history[editor.historyIdx];
+            editor.pixels = h.pixels.slice();
+            editor.width = h.width;
+            editor.height = h.height;
+            edWidth.value = h.width;
+            edHeight.value = h.height;
+            drawEditor();
+            drawPreview();
+        }
+    };
+    document.getElementById('tool-invert').onclick = () => {
+        for (let i = 0; i < editor.pixels.length; i++) {
+            editor.pixels[i] = editor.pixels[i] ? 0 : 1;
+        }
+        pushHistory();
+        drawEditor();
+        drawPreview();
+    };
+    document.getElementById('tool-clear').onclick = () => {
+        editor.pixels.fill(0);
+        pushHistory();
+        drawEditor();
+        drawPreview();
+    };
+    document.getElementById('tool-zoom-in').onclick = () => {
+        editor.zoom = Math.min(64, editor.zoom + 4);
+        drawEditor();
+    };
+    document.getElementById('tool-zoom-out').onclick = () => {
+        editor.zoom = Math.max(4, editor.zoom - 4);
+        drawEditor();
+    };
+    document.getElementById('tool-flip-h').onclick = () => {
+        const w = editor.width, h = editor.height;
+        const np = new Uint8Array(w * h);
+        for (let y = 0; y < h; y++)
+            for (let x = 0; x < w; x++)
+                np[y * w + (w - 1 - x)] = editor.pixels[y * w + x];
+        editor.pixels = np;
+        pushHistory();
+        drawEditor();
+        drawPreview();
+    };
+    document.getElementById('tool-flip-v').onclick = () => {
+        const w = editor.width, h = editor.height;
+        const np = new Uint8Array(w * h);
+        for (let y = 0; y < h; y++)
+            for (let x = 0; x < w; x++)
+                np[(h - 1 - y) * w + x] = editor.pixels[y * w + x];
+        editor.pixels = np;
+        pushHistory();
+        drawEditor();
+        drawPreview();
+    };
+
+    // Width/height change
+    edWidth.addEventListener('change', resizeEditor);
+    edHeight.addEventListener('change', resizeEditor);
+    function resizeEditor() {
+        const nw = Math.max(1, Math.min(32, parseInt(edWidth.value, 10) || editor.width));
+        const nh = Math.max(1, Math.min(32, parseInt(edHeight.value, 10) || editor.height));
+        if (nw === editor.width && nh === editor.height) return;
+        const np = new Uint8Array(nw * nh);
+        const cw = Math.min(nw, editor.width), ch = Math.min(nh, editor.height);
+        for (let y = 0; y < ch; y++)
+            for (let x = 0; x < cw; x++)
+                np[y * nw + x] = editor.pixels[y * editor.width + x];
+        editor.pixels = np;
+        editor.width = nw;
+        editor.height = nh;
+        editor.zoom = Math.max(16, Math.min(48, Math.floor(Math.min(420 / nw, 420 / nh))));
+        edWidth.value = nw;
+        edHeight.value = nh;
+        pushHistory();
+        drawEditor();
+        drawPreview();
+    }
+
+    // Push history when drawing happens (every drag)
+    editCanvas.addEventListener('mouseup', pushHistory);
+    editCanvas.addEventListener('mouseleave', () => { if (isDrawing) pushHistory(); });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT') return;
+        if (editorContent.style.display === 'none') return;
+        if (e.key === '1') setTool('pencil');
+        else if (e.key === '2') setTool('eraser');
+        else if (e.key === '3') setTool('fill');
+        else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            document.getElementById('tool-undo').click();
+        } else if (e.key === 'Escape') {
+            cancelBtn.click();
+        } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            saveBtn.click();
+        }
+    });
+
+    // Save / Cancel / Delete
+    saveBtn.onclick = () => {
+        if (!font) return;
+        const cp = parseInt(edUnicode.value.replace(/^U\+/i, ''), 16);
+        const w = editor.width, h = editor.height;
+
+        // For existing glyph, only mark as modified if pixels actually differ
+        if (editingExisting && !isNewGlyph) {
+            const existing = font.glyphs.get(cp);
+            if (!existing) return;
+            // Check if actually different from original
+            if (pixelsEqual(existing.pixels, editor.pixels) && existing.width === w && existing.height === h) {
+                toast('未做任何修改', 'err');
+                return;
+            }
+        }
+
+        const glyph = {
+            unicode: cp,
+            width: w,
+            height: h,
+            rowBytes: Math.ceil(w / 8),
+            pixels: editor.pixels.slice(),
+            char: String.fromCodePoint(cp),
+            status: isNewGlyph ? 'added' : 'modified',
+        };
+        font.glyphs.set(cp, glyph);
+        const wasNew = isNewGlyph;
+        updateInfo(font.header);
+        // 跳到新/改字形所在页
+        const list = getSortedGlyphs();
+        const idx = list.findIndex(g => g.unicode === cp);
+        const targetPage = idx >= 0 ? Math.floor(idx / PAGE_SIZE) : 0;
+        setState(list, targetPage);
+        selectGlyph(cp);
+        isNewGlyph = false;
+        dirty = false;
+        toast(wasNew ? '字形已添加' : '字形已保存 (待导出)', 'ok');
+        editingExisting = true;
+    };
+
+    function pixelsEqual(a, b) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+        return true;
+    }
+
+    deleteBtn.onclick = () => {
+        if (!editingExisting || isNewGlyph) return;
+        const cp = parseInt(edUnicode.value.replace(/^U\+/i, ''), 16);
+        const g = font.glyphs.get(cp);
+        if (!g) return;
+        if (!confirm(`确认删除字形 ${formatUnicode(cp)} (${g.char})？导出前可恢复。`)) return;
+        if (g.status === 'added') {
+            font.glyphs.delete(cp);
+        } else {
+            g.status = 'deleted';
+        }
+        updateInfo(font.header);
+        setState(getSortedGlyphs(), 0);
+        showEditorEmpty();
+        toast('字形已标记为删除 (待导出)', 'ok');
+    };
+
+    cancelBtn.onclick = () => {
+        showEditorEmpty();
+        document.querySelectorAll('.glyph-card').forEach(c => c.classList.remove('selected'));
+        setState(getSortedGlyphs(), 0);
+    };
+
+    // ─── Export ───
+    exportBtn.onclick = () => {
+        if (!font) return;
+        const modifiedCount = [...font.glyphs.values()].filter(g => g.status !== 'original').length;
+        if (modifiedCount === 0) {
+            toast('无修改，直接下载原文件', 'ok');
+        }
+        const bin = buildBin(font);
+        const blob = new Blob([bin], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'font.bin';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast(`已导出 font.bin (${(bin.byteLength / 1024).toFixed(1)} KB)`, 'ok');
+    };
+
+    function buildBin(font) {
+        // Sort all non-deleted glyphs by Unicode
+        const list = [...font.glyphs.values()]
+            .filter(g => g.status !== 'deleted')
+            .sort((a, b) => a.unicode - b.unicode);
+
+        // Calculate total size: header (16) + index (10*count) + bitmaps
+        let bitmapSize = 0;
+        for (const g of list) {
+            bitmapSize += g.rowBytes * g.height;
+        }
+        const totalSize = 16 + list.length * 10 + bitmapSize;
+        const buf = new ArrayBuffer(totalSize);
+        const view = new DataView(buf);
+        const u8 = new Uint8Array(buf);
+
+        // Header
+        u8[0] = 0x43; u8[1] = 0x4A; u8[2] = 0x46; u8[3] = 0x31; // "CJF1"
+        view.setUint16(4, list.length, true);
+        u8[6] = font.header.fontHeight;
+        u8[7] = font.header.maxWidth;
+
+        // Index + bitmaps
+        let bitmapOffset = 0;
+        for (let i = 0; i < list.length; i++) {
+            const g = list[i];
+            const entryOff = 16 + i * 10;
+            view.setUint32(entryOff, g.unicode, true);
+            view.setUint32(entryOff + 4, bitmapOffset, true);
+            u8[entryOff + 8] = g.width;
+            u8[entryOff + 9] = g.height;
+
+            // Encode pixels back to 1bpp
+            const rowBytes = g.rowBytes;
+            for (let y = 0; y < g.height; y++) {
+                for (let x = 0; x < g.width; x++) {
+                    if (g.pixels[y * g.width + x]) {
+                        const byteIndex = y * rowBytes + (x >>> 3);
+                        const bitIndex = 7 - (x & 7);
+                        u8[16 + list.length * 10 + bitmapOffset + byteIndex] |= (1 << bitIndex);
+                    }
+                }
+            }
+            bitmapOffset += rowBytes * g.height;
+        }
+
+        return buf;
+    }
+
+    // ─── Toast ───
+    function toast(msg, type) {
+        const t = document.createElement('div');
+        t.className = 'toast' + (type ? ' toast-' + type : '');
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2500);
+    }
+
+    // ─── Initial state ───
+    showEditorEmpty();
+
+    console.log('Font editor ready.');
+})();
+</script>
+</body>
+</html>
