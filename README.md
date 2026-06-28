@@ -157,10 +157,6 @@ python tools/scan_missing_chars.py
 2. **CardputerADV 自动检测**：ILI9341 的 CS/DC 引脚自带 4.7k~10k 上拉电阻 → M5GFX 读到 HIGH → 误判 CardputerADV → 键盘切 TCA8418 I2C (G1/G2) → G3/G5/G6 释放
 3. **SPI 共享保护**：`bus_shared = true`；SD 访问前调用 `lcd_quiesce()`（`endWrite + waitDisplay + CS HIGH`）
 
-## 开发文档
-
-- [`整体开发思路(待更新).md`](./整体开发思路(待更新).md) — 完整设计思路、Bug 修复记录、版本变更日志
-
 
 ## 许可
 
