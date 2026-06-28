@@ -2,16 +2,7 @@
 #define COLOR_CONFIG_H
 
 #include <Arduino.h>
-
-// ============ 屏幕布局 ============
-#define SCREEN_W      240
-#define SCREEN_H      135
-#define LINE_HEIGHT   13       // 12px 字 + 1px 行距
-#define TOTAL_LINES   10       // 含状态栏
-#define CONTENT_LINES 9        // 内容区
-#define MARGIN_X      2
-#define STATUS_BAR_Y  0
-#define CONTENT_Y     LINE_HEIGHT
+#include "config.h"   // SCREEN_W/H, LINE_HEIGHT, CONTENT_LINES, MAX_PAGES 等
 
 // ============ 颜色（RGB565）============
 // 背景与前景

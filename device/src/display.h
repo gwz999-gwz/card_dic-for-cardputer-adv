@@ -2,13 +2,14 @@
 #define DISPLAY_H
 
 #include <Arduino.h>
-#include <M5Cardputer.h>
 #include "font_loader.h"
 #include "color_config.h"
 
+namespace lgfx { inline namespace v1 { class LGFX_Device; } }
+
 #define MAX_LINES_PER_PAGE CONTENT_LINES
 #define MAX_LINE_BYTES     256
-#define MAX_PAGES          50     // OALDpe 最长词条 ~50–60 页；96 留余量。超出的词条会截断
+// MAX_PAGES 在 config.h 中按 SCR_USE_EXTERNAL 定义（内屏 50, 外屏 25）
 #define MAX_WORDS          200   // 选词模式：单页最多提取的英文词数
 
 struct RenderLine {
@@ -35,7 +36,8 @@ public:
     DisplayManager();
     ~DisplayManager();
 
-    void begin(FontLoader* font);
+    // 初始化：传入字体 + LGFX 设备指针(内屏 M5Cardputer.Display 或外屏 externalDisplay)
+    void begin(FontLoader* font, lgfx::v1::LGFX_Device* lcd);
     void end();
 
     // 把 dict.bin 的 content 渲染为多行（应用段落过滤）
@@ -83,6 +85,7 @@ public:
 
 private:
     FontLoader* _font;
+    lgfx::v1::LGFX_Device* _lcd;   // 指向当前 LGFX 设备（内屏/外屏）
     DisplayMode _mode;             // 当前显示模式（CN 模式下隐藏例句/变绿中文）
     // 全部页面摊平（最大 32 页 × 9 行 = 288 行 × 256B ≈ 72KB）
     // PSRAM 动态分配：释放 72KB 常规 SRAM；PSRAM 顺序读性能足够 layoutContent 用
@@ -100,9 +103,8 @@ private:
     int charWidth(uint8_t b);
     int utf8CharWidth(const uint8_t* p);
 
-    // ASCII 字符渲染宽度：M5GFX 6×8 字体 × 1.5 缩放后实际渲染 9px 宽
-    // 改 9px = 字符刚好相接，无重叠（与 cardputer-macro 视觉一致）
-    static const int ASCII_CHAR_W = 9;
+    // ASCII 字符渲染宽度：在 config.h 中定义为 ASCII_CHAR_W=9
+    // (M5GFX 6×8 × 1.5 缩放 = 9px 渲染宽, 字符刚好相接)
 
     // 内部：把一个字符写入到 line 缓冲（处理换行/缓冲满）
     bool putChar(RenderLine& line, int& usedWidth, uint8_t b);

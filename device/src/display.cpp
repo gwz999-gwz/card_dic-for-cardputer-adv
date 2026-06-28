@@ -1,7 +1,9 @@
 #include "display.h"
+#include <M5GFX.h>   // LGFX_Device 完整定义（display.h 仅前向声明）
 
 DisplayManager::DisplayManager()
     : _font(nullptr)
+    , _lcd(nullptr)
     , _mode(MODE_ALL)
     , _lines(nullptr)
     , _lineCap(0)
@@ -14,14 +16,15 @@ DisplayManager::~DisplayManager() {
     end();
 }
 
-void DisplayManager::begin(FontLoader* font) {
+void DisplayManager::begin(FontLoader* font, lgfx::v1::LGFX_Device* lcd) {
     _font = font;
+    _lcd = lcd;
     if (!_lines) {
         _lineCap = MAX_PAGES * CONTENT_LINES;
         size_t bytes = sizeof(RenderLine) * _lineCap;
         _lines = (RenderLine*)ps_malloc(bytes);
         if (!_lines) {
-            // PSRAM 不可用时回退到常规 RAM（牺牲 72KB SRAM）
+            // PSRAM 不可用时回退到常规 RAM
             _lines = (RenderLine*)malloc(bytes);
         }
         if (_lines) {
@@ -466,7 +469,7 @@ void DisplayManager::prevPage() {
 }
 
 void DisplayManager::clearContentArea() {
-    M5Cardputer.Display.fillRect(0, CONTENT_Y, SCREEN_W, SCREEN_H - CONTENT_Y, COLOR_BG);
+    if (_lcd) _lcd->fillRect(0, CONTENT_Y, SCREEN_W, SCREEN_H - CONTENT_Y, COLOR_BG);
 }
 
 void DisplayManager::renderLine(int lineIdx, int y, int hlStart, int hlEnd) {
@@ -486,9 +489,9 @@ void DisplayManager::renderLine(int lineIdx, int y, int hlStart, int hlEnd) {
     // 反色显示:fg <-> bg 互换
     auto drawColor = [&](uint16_t fg, int cx) {
         if (isHighlighted(cx)) {
-            M5Cardputer.Display.setTextColor(COLOR_BG, fg);
+            _lcd->setTextColor(COLOR_BG, fg);
         } else {
-            M5Cardputer.Display.setTextColor(fg, COLOR_BG);
+            _lcd->setTextColor(fg, COLOR_BG);
         }
     };
 
@@ -514,30 +517,30 @@ void DisplayManager::renderLine(int lineIdx, int y, int hlStart, int hlEnd) {
             if (b == TAG_AUDIO_UK) {
                 if (isHighlighted(x)) {
                     // 反色块覆盖 [UK]
-                    M5Cardputer.Display.fillRect(x, y, 4 * 6, 12, curColor);
-                    M5Cardputer.Display.setTextSize(1);
-                    M5Cardputer.Display.setTextColor(COLOR_BG, curColor);
-                    M5Cardputer.Display.setCursor(x, y);
-                    M5Cardputer.Display.print("[UK]");
+                    _lcd->fillRect(x, y, 4 * 6, 12, curColor);
+                    _lcd->setTextSize(1);
+                    _lcd->setTextColor(COLOR_BG, curColor);
+                    _lcd->setCursor(x, y);
+                    _lcd->print("[UK]");
                 } else {
-                    M5Cardputer.Display.setTextSize(1);
-                    M5Cardputer.Display.setTextColor(curColor, COLOR_BG);
-                    M5Cardputer.Display.setCursor(x, y);
-                    M5Cardputer.Display.print("[UK]");
+                    _lcd->setTextSize(1);
+                    _lcd->setTextColor(curColor, COLOR_BG);
+                    _lcd->setCursor(x, y);
+                    _lcd->print("[UK]");
                 }
                 x += 4 * 6;
             } else if (b == TAG_AUDIO_US) {
                 if (isHighlighted(x)) {
-                    M5Cardputer.Display.fillRect(x, y, 4 * 6, 12, curColor);
-                    M5Cardputer.Display.setTextSize(1);
-                    M5Cardputer.Display.setTextColor(COLOR_BG, curColor);
-                    M5Cardputer.Display.setCursor(x, y);
-                    M5Cardputer.Display.print("[US]");
+                    _lcd->fillRect(x, y, 4 * 6, 12, curColor);
+                    _lcd->setTextSize(1);
+                    _lcd->setTextColor(COLOR_BG, curColor);
+                    _lcd->setCursor(x, y);
+                    _lcd->print("[US]");
                 } else {
-                    M5Cardputer.Display.setTextSize(1);
-                    M5Cardputer.Display.setTextColor(curColor, COLOR_BG);
-                    M5Cardputer.Display.setCursor(x, y);
-                    M5Cardputer.Display.print("[US]");
+                    _lcd->setTextSize(1);
+                    _lcd->setTextColor(curColor, COLOR_BG);
+                    _lcd->setCursor(x, y);
+                    _lcd->print("[US]");
                 }
                 x += 4 * 6;
             }
@@ -548,9 +551,9 @@ void DisplayManager::renderLine(int lineIdx, int y, int hlStart, int hlEnd) {
         if (b < 0x80) {
             // ASCII：M5GFX 6×8 字体 × 1.5 缩放，纵向匹配 12px CJK
             drawColor(curColor, x);
-            M5Cardputer.Display.setTextSize(1.5f);
-            M5Cardputer.Display.setCursor(x, y);
-            M5Cardputer.Display.print((char)b);
+            _lcd->setTextSize(1.5f);
+            _lcd->setCursor(x, y);
+            _lcd->print((char)b);
             x += ASCII_CHAR_W;
             p++;
         } else {
@@ -575,28 +578,28 @@ void DisplayManager::renderLine(int lineIdx, int y, int hlStart, int hlEnd) {
                     const uint8_t* bmp = _font->getGlyphBitmap(g);
                     if (bmp) {
                         if (isHighlighted(x)) {
-                            M5Cardputer.Display.fillRect(x, y, g->width, g->height, curColor);
-                            M5Cardputer.Display.drawBitmap(x, y, (uint8_t*)bmp,
+                            _lcd->fillRect(x, y, g->width, g->height, curColor);
+                            _lcd->drawBitmap(x, y, (uint8_t*)bmp,
                                                            g->width, g->height,
                                                            COLOR_BG, curColor);
                         } else {
-                            M5Cardputer.Display.drawBitmap(x, y, (uint8_t*)bmp,
+                            _lcd->drawBitmap(x, y, (uint8_t*)bmp,
                                                            g->width, g->height,
                                                            curColor, COLOR_BG);
                         }
                     } else {
                         drawColor(COLOR_BAT_LOW, x);
-                        M5Cardputer.Display.setTextSize(1);
-                        M5Cardputer.Display.setCursor(x, y);
-                        M5Cardputer.Display.print("?");
+                        _lcd->setTextSize(1);
+                        _lcd->setCursor(x, y);
+                        _lcd->print("?");
                     }
                     x += g->width;
                 } else {
                     // 缺字显示 ?
                     drawColor(COLOR_BAT_LOW, x);
-                    M5Cardputer.Display.setTextSize(1);
-                    M5Cardputer.Display.setCursor(x, y);
-                    M5Cardputer.Display.print("?");
+                    _lcd->setTextSize(1);
+                    _lcd->setCursor(x, y);
+                    _lcd->print("?");
                     x += 6;
                 }
                 p += bytes;
@@ -639,7 +642,7 @@ void DisplayManager::drawStatusBar(const char* text, int batteryPct, bool sdOk,
                                    bool isDetail) {
     (void)sdOk;  // SD 失败时启动已卡住，主界面不再单独显示
     // 顶部 13px 区域
-    M5Cardputer.Display.fillRect(0, 0, SCREEN_W, LINE_HEIGHT, COLOR_BG);
+    _lcd->fillRect(0, 0, SCREEN_W, LINE_HEIGHT, COLOR_BG);
 
     // 字号 1.5x：6×8 → 9×12，与内容区 ASCII 一致
     const float SB_SIZE = 1.5f;
@@ -652,26 +655,26 @@ void DisplayManager::drawStatusBar(const char* text, int batteryPct, bool sdOk,
     int rx = SCREEN_W - MARGIN_X;  // 238
 
     // 模式标签
-    M5Cardputer.Display.setTextSize(SB_SIZE);
-    M5Cardputer.Display.setTextColor(modeColor(mode), COLOR_BG);
-    M5Cardputer.Display.setCursor(rx - 2 * SB_CHAR_W, 1);
-    M5Cardputer.Display.print(modeLabel(mode));
+    _lcd->setTextSize(SB_SIZE);
+    _lcd->setTextColor(modeColor(mode), COLOR_BG);
+    _lcd->setCursor(rx - 2 * SB_CHAR_W, 1);
+    _lcd->print(modeLabel(mode));
     rx -= 2 * SB_CHAR_W + 2;  // 220
 
     // 电量
     snprintf(buf, sizeof(buf), "%d%%", batteryPct);
-    M5Cardputer.Display.setTextColor(
+    _lcd->setTextColor(
         batteryPct <= 20 ? COLOR_BAT_LOW : COLOR_BAT_OK, COLOR_BG);
-    M5Cardputer.Display.setCursor(rx - 4 * SB_CHAR_W, 1);
-    M5Cardputer.Display.print(buf);
+    _lcd->setCursor(rx - 4 * SB_CHAR_W, 1);
+    _lcd->print(buf);
     rx -= 4 * SB_CHAR_W + 2;  // 182
 
     // 页码（详情页 + 多页时）：紧贴 headword 右侧
     if (isDetail && pageCount > 1) {
         snprintf(buf, sizeof(buf), " %d/%d", currentPage + 1, pageCount);
-        M5Cardputer.Display.setTextColor(COLOR_XREF, COLOR_BG);
-        M5Cardputer.Display.setCursor(rx - (int)strlen(buf) * SB_CHAR_W, 1);
-        M5Cardputer.Display.print(buf);
+        _lcd->setTextColor(COLOR_XREF, COLOR_BG);
+        _lcd->setCursor(rx - (int)strlen(buf) * SB_CHAR_W, 1);
+        _lcd->print(buf);
         rx -= (int)strlen(buf) * SB_CHAR_W + 2;
     }
 
@@ -690,9 +693,9 @@ void DisplayManager::drawStatusBar(const char* text, int batteryPct, bool sdOk,
                 strncpy(trunc, text, sizeof(trunc) - 1);
                 trunc[sizeof(trunc) - 1] = '\0';
             }
-            M5Cardputer.Display.setTextColor(COLOR_HEADWORD, COLOR_BG);
-            M5Cardputer.Display.setCursor(MARGIN_X, 1);
-            M5Cardputer.Display.print(trunc);
+            _lcd->setTextColor(COLOR_HEADWORD, COLOR_BG);
+            _lcd->setCursor(MARGIN_X, 1);
+            _lcd->print(trunc);
         }
     } else {
         // 搜索页："> query" 形式
@@ -708,14 +711,14 @@ void DisplayManager::drawStatusBar(const char* text, int batteryPct, bool sdOk,
                 strncpy(trunc, text, sizeof(trunc) - 1);
                 trunc[sizeof(trunc) - 1] = '\0';
             }
-            M5Cardputer.Display.setTextColor(COLOR_INPUT, COLOR_BG);
-            M5Cardputer.Display.setCursor(MARGIN_X, 1);
-            M5Cardputer.Display.print("> ");
-            M5Cardputer.Display.print(trunc);
+            _lcd->setTextColor(COLOR_INPUT, COLOR_BG);
+            _lcd->setCursor(MARGIN_X, 1);
+            _lcd->print("> ");
+            _lcd->print(trunc);
         } else {
-            M5Cardputer.Display.setTextColor(COLOR_XREF, COLOR_BG);
-            M5Cardputer.Display.setCursor(MARGIN_X, 1);
-            M5Cardputer.Display.print("> _");
+            _lcd->setTextColor(COLOR_XREF, COLOR_BG);
+            _lcd->setCursor(MARGIN_X, 1);
+            _lcd->print("> _");
         }
     }
 }
@@ -723,7 +726,7 @@ void DisplayManager::drawStatusBar(const char* text, int batteryPct, bool sdOk,
 int DisplayManager::drawMixedString(int x, int y, const char* str, uint16_t color,
                                   int hlStart, int hlEnd) {
     // 中英混排渲染: ASCII 走 M5GFX 内置字体(1.5x), CJK 走 font.bin (drawBitmap)
-    // M5Cardputer.Display.print() 只支持内置字体,不能直接打中文
+    // _lcd->print() 只支持内置字体,不能直接打中文
     if (!str) return x;
     const uint8_t* p = (const uint8_t*)str;
     while (*p) {
@@ -736,10 +739,10 @@ int DisplayManager::drawMixedString(int x, int y, const char* str, uint16_t colo
 
         if (b < 0x80) {
             // ASCII: 内置 6x8 × 1.5 → 9x12
-            M5Cardputer.Display.setTextSize(1.5f);
-            M5Cardputer.Display.setTextColor(fg, bg);
-            M5Cardputer.Display.setCursor(x, y);
-            M5Cardputer.Display.print((char)b);
+            _lcd->setTextSize(1.5f);
+            _lcd->setTextColor(fg, bg);
+            _lcd->setCursor(x, y);
+            _lcd->print((char)b);
             x += ASCII_CHAR_W;
             p++;
         } else {
@@ -760,29 +763,29 @@ int DisplayManager::drawMixedString(int x, int y, const char* str, uint16_t colo
                     const uint8_t* bmp = _font->getGlyphBitmap(g);
                     if (bmp) {
                         if (highlighted) {
-                            M5Cardputer.Display.fillRect(x, y, g->width, g->height, color);
-                            M5Cardputer.Display.drawBitmap(x, y, (uint8_t*)bmp,
+                            _lcd->fillRect(x, y, g->width, g->height, color);
+                            _lcd->drawBitmap(x, y, (uint8_t*)bmp,
                                                            g->width, g->height,
                                                            COLOR_BG, color);
                         } else {
-                            M5Cardputer.Display.drawBitmap(x, y, (uint8_t*)bmp,
+                            _lcd->drawBitmap(x, y, (uint8_t*)bmp,
                                                            g->width, g->height,
                                                            color, COLOR_BG);
                         }
                     } else {
                         // 位图缺失 → 画 "?"
-                        M5Cardputer.Display.setTextSize(1);
-                        M5Cardputer.Display.setTextColor(fg, bg);
-                        M5Cardputer.Display.setCursor(x, y);
-                        M5Cardputer.Display.print("?");
+                        _lcd->setTextSize(1);
+                        _lcd->setTextColor(fg, bg);
+                        _lcd->setCursor(x, y);
+                        _lcd->print("?");
                     }
                     x += g->width;
                 } else {
                     // 缺字 → 画 "?" (1x 字体, 推进 6px, 与 renderLine 一致)
-                    M5Cardputer.Display.setTextSize(1);
-                    M5Cardputer.Display.setTextColor(fg, bg);
-                    M5Cardputer.Display.setCursor(x, y);
-                    M5Cardputer.Display.print("?");
+                    _lcd->setTextSize(1);
+                    _lcd->setTextColor(fg, bg);
+                    _lcd->setCursor(x, y);
+                    _lcd->print("?");
                     x += 6;
                 }
             } else {
@@ -797,13 +800,13 @@ int DisplayManager::drawMixedString(int x, int y, const char* str, uint16_t colo
 void DisplayManager::drawHints(const char* hint) {
     // 底部提示行（紧贴屏幕底部，13px 高度）
     int y = SCREEN_H - LINE_HEIGHT + 1;
-    M5Cardputer.Display.fillRect(0, y - 1, SCREEN_W, LINE_HEIGHT, COLOR_BG);
+    _lcd->fillRect(0, y - 1, SCREEN_W, LINE_HEIGHT, COLOR_BG);
     drawMixedString(MARGIN_X, y, hint, COLOR_XREF);
 }
 
 void DisplayManager::drawIntroScreen(const char* const lines[], int n) {
     // 开屏介绍:状态栏下方开始,每行 13px,最多 CONTENT_LINES 行(9 行)
-    M5Cardputer.Display.fillRect(0, CONTENT_Y, SCREEN_W,
+    _lcd->fillRect(0, CONTENT_Y, SCREEN_W,
                                  SCREEN_H - CONTENT_Y, COLOR_BG);
     for (int i = 0; i < n && i < CONTENT_LINES; i++) {
         int y = CONTENT_Y + i * LINE_HEIGHT;
@@ -813,5 +816,5 @@ void DisplayManager::drawIntroScreen(const char* const lines[], int n) {
 
 void DisplayManager::clearHints() {
     int y = SCREEN_H - LINE_HEIGHT + 1;
-    M5Cardputer.Display.fillRect(0, y - 1, SCREEN_W, LINE_HEIGHT, COLOR_BG);
+    _lcd->fillRect(0, y - 1, SCREEN_W, LINE_HEIGHT, COLOR_BG);
 }
