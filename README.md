@@ -43,8 +43,6 @@ VCC → 5V_OUT → AMS1117-3.3 → 3.3V
 GND → GND
 ```
 
-> ⚠️ **接线错了会无法点亮**。ILI9341 的 CS(G5)/DC(G6) 自带上拉电阻 → 触发 M5GFX 自动识别为 CardputerADV → 键盘走 TCA8418 I2C (G1/G2) → G3/G5/G6 从 IOMatrix 释放。
-
 ## 快速开始
 
 ### 1. 准备 SD 卡
@@ -150,12 +148,6 @@ python tools/scan_missing_chars.py
 - 字体懒加载：index 常驻 PSRAM（~47 KB），位图按需从 SD 读 + 128 项 LRU 缓存
 - bucket 索引二分查找；模糊匹配先前缀后包含
 - 渲染走 PSRAM 顺序读，layoutContent 一次性摊平所有页
-
-## 屏幕切换实现原理（v10）
-
-1. **SPI3_HOST 共享**：内屏 / 外屏 / SD 卡共一条 HSPI 总线，靠 CS 区分。**OPI PSRAM 占用 SPI2**，所以外屏**不能再用 SPI2**
-2. **CardputerADV 自动检测**：ILI9341 的 CS/DC 引脚自带 4.7k~10k 上拉电阻 → M5GFX 读到 HIGH → 误判 CardputerADV → 键盘切 TCA8418 I2C (G1/G2) → G3/G5/G6 释放
-3. **SPI 共享保护**：`bus_shared = true`；SD 访问前调用 `lcd_quiesce()`（`endWrite + waitDisplay + CS HIGH`）
 
 
 ## 许可
